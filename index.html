@@ -218,7 +218,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAut
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, doc, addDoc, setDoc, deleteDoc, onSnapshot, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { isYouTube, fetchYouTubeInfo, cleanVideoTitle, extractKaraokeNumbers, searchITunes, searchKaraoke, searchLinks } from "./songtools.js";
+import { isYouTube, fetchYouTubeInfo, cleanVideoTitle, extractKaraokeNumbers, searchITunes, searchKaraoke, searchLinks } from "./songtools.js?v=5";
 
 const $ = id => document.getElementById(id);
 const CATS = { karaoke: "노래방", praise: "찬양", wedding: "결혼" };
@@ -435,19 +435,24 @@ async function findFromLink() {
     renderK();
     note("findNote", `영상 제목 "${info.title}"을 정리했어요. 음원 정보와 맞춰보는 중…`);
 
-    let results = await searchITunes(guess.query);
-    if (!results.length && guess.artist) results = await searchITunes(guess.title);
+    // 검색어 단어가 하나도 안 맞는 결과는 버림
+    const results = (await searchITunes(guess.query)).filter(r => r.score > 0).slice(0, 4);
     if (seq !== findSeq) return;
 
     if (results.length) {
-      $("cands").innerHTML = results.slice(0, 4).map(r =>
+      $("cands").innerHTML = results.map(r =>
         `<button type="button" class="cand" data-k="${esc(r.title + "|" + r.artist)}"><span>${esc(r.title)}</span><small>${esc(r.artist)}${r.album ? " · " + esc(r.album) : ""}</small></button>`).join("");
       $("cands").hidden = false;
       [...$("cands").children].forEach((b, i) => b.onclick = () => pickCandidate(results[i]));
+    }
+    if (results[0]?.score === 1) {
+      // 검색어 단어가 전부 맞는 후보가 있을 때만 자동으로 채움
       pickCandidate(results[0]);
       note("findNote", results.length > 1 ? "음원 정보로 확인했어요. 다른 곡이면 아래 후보에서 골라주세요." : "음원 정보로 확인했어요.");
     } else {
-      note("findNote", "음원 정보에서 찾지 못해 영상 제목을 정리해서 넣었어요. 맞는지 한 번 봐주세요.", "warn");
+      note("findNote", results.length
+        ? "정확히 일치하는 음원은 없어서 영상 제목으로 채웠어요. 아래 후보 중 맞는 곡이 있으면 눌러주세요."
+        : "음원 정보에서 찾지 못해 영상 제목을 정리해서 넣었어요. 맞는지 한 번 봐주세요.", "warn");
       if (form.category === "karaoke") findKaraoke();
     }
   } finally {

@@ -79,6 +79,12 @@ export function cleanVideoTitle(raw, channel = "") {
     if (KARAOKE_CHANNEL.test(channel) || KARAOKE_CHANNEL.test(raw)) { title = m[1].trim(); artist = m[2].trim(); }
     else { artist = m[1].trim(); title = m[2].trim(); }
   }
+  // 노래방 채널의 "제목 가수" (구분자 없음): 마지막 단어를 가수로 추정
+  else if ((KARAOKE_CHANNEL.test(channel) || KARAOKE_CHANNEL.test(raw)) && t.split(" ").length >= 2) {
+    const words = t.split(" ");
+    artist = words.pop();
+    title = words.join(" ");
+  }
   title = title.replace(/^["'“‘]|["'”’]$/g, "").trim();
 
   // 가수를 못 찾으면 채널명 사용 (" - Topic", "Official" 등 정리). 노래방 채널 이름은 가수가 아니니 제외.
@@ -150,13 +156,26 @@ async function searchDeezer(query) {
   }
 }
 
-// 이름은 그대로 두고, 여러 음원 DB를 차례로 찾도록 확장
+// 검색 결과가 검색어 단어들과 얼마나 맞는지 점수 매기기 (0~1)
+const normWord = s => String(s || "").toLowerCase().replace(/[\s()\[\]'".,!?~\-_·]/g, "");
+export function matchScore(cand, query) {
+  const words = String(query || "").split(/\s+/).map(normWord).filter(w => w.length >= 1);
+  if (!words.length) return 0;
+  const hay = normWord(cand.title + " " + cand.artist);
+  return words.filter(w => hay.includes(w)).length / words.length;
+}
+
+// 이름은 그대로 두고, 여러 음원 DB를 찾아 점수 순으로 정렬
 export async function searchITunes(query) {
   if (!query) return [];
   let list = await searchITunesOnly(query);
-  if (!list.length) list = await searchDeezer(query);
+  const best = l => Math.max(0, ...l.map(c => matchScore(c, query)));
+  if (best(list) < 1) list = list.concat(await searchDeezer(query));
+  list = dedupe(list)
+    .map(c => ({ ...c, score: matchScore(c, query) }))
+    .sort((a, b) => b.score - a.score);
   console.info(`[곡서랍] "${query}" 검색 결과 ${list.length}건`, list);
-  return dedupe(list);
+  return list;
 }
 
 // ---------- 5. 노래방 번호 (비공식 무료 API, 안 되면 조용히 빈 결과) ----------
