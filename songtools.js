@@ -244,48 +244,56 @@ export async function searchSongs(guess) {
 // 악센트 제거(ROSÉ → rose), 소문자, 기호·띄어쓰기 제거
 const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[\s()\[\]'".,!?~\-_]/g, "");
 
+const hasHangul = s => /[가-힣]/.test(String(s || ""));
+
+async function getList(url) {
+  const r = await fetch(url).catch(() => null);
+  if (!r?.ok) return [];
+  const j = await r.json().catch(() => []);
+  return Array.isArray(j) ? j : [];
+}
+
 export async function searchKaraoke(title, artist) {
   if (!title) return [];
   const out = [];
-  // 브랜드별 주소가 안 되면 전체 검색 주소에서 브랜드로 걸러요
-  let all = null;
+  const q = norm(title);
+  const names = splitArtists(artist).map(norm).filter(Boolean);
+  const rawNames = splitArtists(artist);
+
+  // 제목: 같거나, 노래방 제목이 우리 제목으로 시작하면 OK ("화이트(White)" ← "화이트")
+  const titleOk = x => { const t = norm(x.title); return t === q || (q.length >= 2 && t.startsWith(q)); };
+  // 가수: 이름이 서로 포함되면 OK
+  const singerOk = x => !names.length || names.some(a => norm(x.singer).includes(a) || a.includes(norm(x.singer)));
+  // 표기 언어가 다른 경우(ROSÉ ↔ 로제)에만 가수 비교를 건너뛸 수 있음
+  const scriptDiffers = x => rawNames.length > 0 && rawNames.every(n => hasHangul(n) !== hasHangul(x.singer));
+
+  const pick = (list, brand) => {
+    const hit = list.find(x => titleOk(x) && singerOk(x));
+    if (hit) return hit;
+    const sameTitle = list.filter(titleOk);
+    if (sameTitle.length === 1 && scriptDiffers(sameTitle[0])) return sameTitle[0];
+    if (sameTitle.length) console.info(`[곡서랍] 노래방 ${brand}: 같은 제목은 있지만 가수가 달라서 제외`, sameTitle.slice(0, 5));
+    return null;
+  };
+
   for (const brand of ["tj", "kumyoung"]) {
     try {
-      let list = null;
-      // 띄어쓰기 있는 제목 → 없는 제목 순서로 시도 (TJ는 띄어쓰기 없이 등록된 곡이 많아요)
+      let hit = null;
+      // 1) 제목으로 (띄어쓰기 있는 / 없는 제목)
       for (const t of [...new Set([title, title.replace(/\s+/g, "")])]) {
-        const r = await fetch(`https://api.manana.kr/karaoke/song/${encodeURIComponent(t)}/${brand}.json`).catch(() => null);
-        if (r?.ok) list = await r.json().catch(() => null);
-        if (Array.isArray(list) && list.length) break;
+        hit = pick(await getList(`https://api.manana.kr/karaoke/song/${encodeURIComponent(t)}/${brand}.json`), brand);
+        if (hit) break;
       }
-      if (!Array.isArray(list) || !list.length) {
-        if (all === null) {
-          const r2 = await fetch(`https://api.manana.kr/karaoke/song/${encodeURIComponent(title)}.json`).catch(() => null);
-          all = r2?.ok ? await r2.json().catch(() => []) : [];
-          console.info("[곡서랍] 노래방 전체검색 응답", r2?.status, all);
-        }
-        list = (Array.isArray(all) ? all : []).filter(x => String(x.brand || "").toLowerCase() === brand);
-      }
-      // 제목으로 못 찾으면 가수 이름으로 검색해서 띄어쓰기 무시하고 제목 비교
-      if (!list.length && artist) {
-        for (const singer of splitArtists(artist)) {
-          const r3 = await fetch(`https://api.manana.kr/karaoke/singer/${encodeURIComponent(singer)}/${brand}.json`).catch(() => null);
-          const bySinger = r3?.ok ? await r3.json().catch(() => []) : [];
-          console.info(`[곡서랍] 노래방 가수검색 ${brand} "${singer}"`, r3?.status, Array.isArray(bySinger) ? bySinger.length : bySinger);
-          list = (Array.isArray(bySinger) ? bySinger : []).filter(x => norm(x.title) === norm(title) || norm(x.title).includes(norm(title)));
-          if (list.length) break;
+      // 2) 가수 이름으로 검색해서 그 가수 곡 중 제목이 맞는 곡
+      if (!hit) {
+        for (const singer of rawNames) {
+          const list = await getList(`https://api.manana.kr/karaoke/singer/${encodeURIComponent(singer)}/${brand}.json`);
+          console.info(`[곡서랍] 노래방 가수검색 ${brand} "${singer}" ${list.length}건`);
+          hit = list.find(titleOk) || null;
+          if (hit) break;
         }
       }
-      if (!list.length) continue;
-      const names = splitArtists(artist).map(norm).filter(Boolean);
-      const singerOk = x => !names.length || names.some(a => norm(x.singer).includes(a) || a.includes(norm(x.singer)));
-      const titleOk = x => norm(x.title) === norm(title);
-      const sameTitle = list.filter(titleOk);
-      const hit = list.find(x => titleOk(x) && singerOk(x))      // 제목·가수 모두 일치
-               || (sameTitle.length === 1 ? sameTitle[0] : null)  // 같은 제목이 하나뿐이면 가수 표기가 달라도(ROSÉ/로제) 채택
-               || list.find(singerOk);                           // 가수만 일치
-      if (!hit) console.info(`[곡서랍] 노래방 ${brand} 후보는 있지만 일치하는 곡 없음`, list.slice(0, 5));
-      if (hit && hit.no) out.push({ company: brand === "tj" ? "TJ" : "금영", number: String(hit.no) });
+      if (hit?.no) out.push({ company: brand === "tj" ? "TJ" : "금영", number: String(hit.no) });
     } catch { /* API를 못 쓰면 건너뜀 */ }
   }
   return out;
