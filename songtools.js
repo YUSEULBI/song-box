@@ -257,11 +257,17 @@ export async function searchKaraoke(title, artist) {
   if (!title) return [];
   const out = [];
   const q = norm(title);
+  // "(feat. 박보람)", "[Prod. ...]" 같은 괄호를 뗀 제목 (노래방엔 보통 이렇게 등록돼요)
+  const baseTitle = String(title).replace(/\s*[\(\[][^)\]]*[\)\]]\s*/g, " ").replace(/\s{2,}/g, " ").trim() || title;
+  const qb = norm(baseTitle);
   const names = splitArtists(artist).map(norm).filter(Boolean);
   const rawNames = splitArtists(artist);
 
   // 제목: 같거나, 노래방 제목이 우리 제목으로 시작하면 OK ("화이트(White)" ← "화이트")
-  const titleOk = x => { const t = norm(x.title); return t === q || (q.length >= 2 && t.startsWith(q)); };
+  const titleOk = x => {
+    const t = norm(x.title);
+    return t === q || t === qb || (qb.length >= 2 && t.startsWith(qb));
+  };
   // 가수: 이름이 서로 포함되면 OK
   const singerOk = x => !names.length || names.some(a => norm(x.singer).includes(a) || a.includes(norm(x.singer)));
   // 표기 언어가 다른 경우(ROSÉ ↔ 로제)에만 가수 비교를 건너뛸 수 있음
@@ -280,7 +286,7 @@ export async function searchKaraoke(title, artist) {
     try {
       let hit = null;
       // 1) 제목으로 (띄어쓰기 있는 / 없는 제목)
-      for (const t of [...new Set([title, title.replace(/\s+/g, "")])]) {
+      for (const t of [...new Set([title, baseTitle, title.replace(/\s+/g, ""), baseTitle.replace(/\s+/g, "")])]) {
         hit = pick(await getList(`https://api.manana.kr/karaoke/song/${encodeURIComponent(t)}/${brand}.json`), brand);
         if (hit) break;
       }

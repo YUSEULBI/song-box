@@ -77,7 +77,7 @@ h1{font:400 34px/1.05 var(--f-display);margin:0;letter-spacing:.5px}
   padding:20px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:grid;gap:14px}
 @media (min-width:640px){.overlay{align-items:center}.sheet{border-radius:18px}}
 .sheet h2{font:400 22px var(--f-display);margin:0}
-.field{display:grid;gap:5px}
+.field{display:grid;gap:5px;align-content:start}
 .field label,.lbl{font-size:13px;font-weight:600}
 .field input,.field textarea{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
 .field textarea{resize:vertical;min-height:60px}
@@ -96,7 +96,7 @@ h1{font:400 34px/1.05 var(--f-display);margin:0;letter-spacing:.5px}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 14px;cursor:pointer}
 .seg button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
-.sel{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.sel{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:0 12px;height:44px;width:100%;min-width:0}
 .stepper{display:flex;align-items:center;gap:8px}
 .stepper output{flex:1;text-align:center;font:600 16px var(--f-mono);font-variant-numeric:tabular-nums;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 0}
 .stepper .icon-btn{width:40px;height:40px;font-size:18px}
@@ -218,7 +218,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAut
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, doc, addDoc, setDoc, deleteDoc, onSnapshot, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { isYouTube, fetchYouTubeInfo, cleanVideoTitle, extractKaraokeNumbers, searchSongs, searchKaraoke, searchLinks } from "./songtools.js?v=11";
+import { isYouTube, fetchYouTubeInfo, cleanVideoTitle, extractKaraokeNumbers, searchSongs, searchKaraoke, searchLinks } from "./songtools.js?v=12";
 
 const $ = id => document.getElementById(id);
 const CATS = { karaoke: "노래방", praise: "찬양", wedding: "결혼" };
@@ -448,8 +448,10 @@ async function findFromLink() {
     if (results[0]?.exact) {
       // 제목이 맞고, 영상 속 가수 중 한 명이라도 일치하는 공식 음원이면 자동으로 채움
       pickCandidate(results[0]);
+      // 실제로 여러 명이 부른 영상일 때만 (영어·한글 이름 같은 별칭은 한 사람으로 봄)
+      const multiPeople = /[&,×]|\sx\s|feat\.?|ft\.|with/i.test(guess.artist);
       const others = guess.artists.filter(a => !results[0].artist.includes(a));
-      note("findNote", others.length && guess.artists.length > 1
+      note("findNote", multiPeople && others.length
         ? `영상은 ${guess.artists.join(", ")} 버전이지만, 원곡 공식 음원(${results[0].artist})으로 채웠어요.`
         : results.length > 1 ? "공식 음원으로 확인했어요. 다른 곡이면 아래 후보에서 골라주세요." : "공식 음원으로 확인했어요.");
     } else {
