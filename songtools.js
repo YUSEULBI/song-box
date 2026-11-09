@@ -141,7 +141,7 @@ async function getJSON(url, label) {
 }
 
 async function searchITunesOnly(query) {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=KR&media=music&entity=song&limit=6`;
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=US&media=music&entity=song&limit=6`;
   const data = await getJSON(url, "iTunes");
   return (data?.results || []).map(r => ({ title: r.trackName, artist: r.artistName, album: r.collectionName, src: "iTunes" }));
 }
