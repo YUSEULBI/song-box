@@ -218,7 +218,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAut
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { initializeFirestore, persistentLocalCache, collection, doc, addDoc, setDoc, deleteDoc, onSnapshot, query, orderBy }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { isYouTube, fetchYouTubeInfo, cleanVideoTitle, searchITunes, searchKaraoke, searchLinks } from "./songtools.js";
+import { isYouTube, fetchYouTubeInfo, cleanVideoTitle, extractKaraokeNumbers, searchITunes, searchKaraoke, searchLinks } from "./songtools.js";
 
 const $ = id => document.getElementById(id);
 const CATS = { karaoke: "노래방", praise: "찬양", wedding: "결혼" };
@@ -409,7 +409,7 @@ function pickCandidate(c) {
   $("f-title").value = c.title; $("f-artist").value = c.artist;
   [...$("cands").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.k === c.title + "|" + c.artist));
   renderK();
-  if (form.category === "karaoke") findKaraoke();
+  if (form.category === "karaoke" && !(form.karaoke.some(k => k.company === "TJ" && k.number) && form.karaoke.some(k => k.company === "금영" && k.number))) findKaraoke();
 }
 
 async function findFromLink() {
@@ -425,6 +425,13 @@ async function findFromLink() {
     if (!info) { note("findNote", "영상 정보를 가져오지 못했어요. 제목과 가수를 직접 입력해 주세요.", "warn"); return; }
     const guess = cleanVideoTitle(info.title, info.channel);
     $("f-title").value = guess.title; $("f-artist").value = guess.artist;
+    // 노래방 채널 영상이면 제목 속 번호를 바로 채움
+    const inTitle = extractKaraokeNumbers(info.title);
+    for (const f of inTitle) {
+      const k = form.karaoke.find(k => k.company === f.company);
+      if (k) { if (!k.number) k.number = f.number; } else form.karaoke.push(f);
+    }
+    if (inTitle.length) note("kNote", `영상 제목에서 ${inTitle.map(f => f.company + " " + f.number).join(", ")} 번호를 가져왔어요.`);
     renderK();
     note("findNote", `영상 제목 "${info.title}"을 정리했어요. 음원 정보와 맞춰보는 중…`);
 
@@ -455,10 +462,15 @@ async function findKaraoke() {
   $("kFind").disabled = true;
   try {
     const found = await searchKaraoke(t, a);
-    if (!found.length) { note("kNote", "번호를 자동으로 찾지 못했어요. 아래 검색 링크로 확인해서 직접 넣어주세요.", "warn"); return; }
+    const had = form.karaoke.filter(k => k.number).map(k => k.company);
+    if (!found.length) {
+      note("kNote", had.length ? `${had.join(", ")} 번호는 있어요. 나머지는 자동으로 찾지 못했어요. 아래 검색 링크로 확인해 주세요.`
+                               : "번호를 자동으로 찾지 못했어요. 아래 검색 링크로 확인해서 직접 넣어주세요.", "warn");
+      return;
+    }
     for (const f of found) {
       const k = form.karaoke.find(k => k.company === f.company);
-      if (k) k.number = f.number; else form.karaoke.push(f);
+      if (k) { if (!k.number) k.number = f.number; } else form.karaoke.push(f);
     }
     renderK();
     note("kNote", `${found.map(f => f.company).join(", ")} 번호를 찾았어요.`);
