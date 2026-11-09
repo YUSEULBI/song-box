@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>내 곡 서랍</title>
+<meta name="theme-color" content="#eef0f5">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --bg:#eef0f5; --surface:#fff; --ink:#1d1a2e; --muted:#6a6780; --line:#d9dbe6;
+  --accent:#e2492f; --accent-ink:#fff;
+  --c-karaoke:#c2185b; --c-praise:#0f7b76; --c-wedding:#a26a00;
+  --tint-karaoke:#fbe6ef; --tint-praise:#e0f2f0; --tint-wedding:#f8eed8;
+  --f-display:"Black Han Sans","IBM Plex Sans KR",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#14131d; --surface:#1e1c2a; --ink:#ecebf3; --muted:#9d9ab3; --line:#34314a;
+  --accent:#ff6a4f; --accent-ink:#1a0c08;
+  --c-karaoke:#ff7eb3; --c-praise:#5fd1c9; --c-wedding:#f0bf5a;
+  --tint-karaoke:#3a1a2a; --tint-praise:#123532; --tint-wedding:#3a2e14; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:720px;margin:0 auto;padding-block:20px 80px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font:400 34px/1.05 var(--f-display);margin:0;letter-spacing:.5px}
+.sub{color:var(--muted);font-size:13px;margin:4px 0 0}
+.head-actions{display:flex;gap:8px;align-items:center}
+.btn{border:0;border-radius:10px;padding:10px 16px;cursor:pointer;font-weight:600;background:var(--line);color:var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;border:1px solid var(--line)}
+.btn.small{padding:6px 12px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.toolbar{position:sticky;top:0;z-index:5;background:var(--bg);padding-block:14px 10px;display:grid;gap:10px}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:14px;white-space:nowrap}
+.tab[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tab .n{font:500 12px var(--f-mono);opacity:.65;margin-left:4px}
+.subtabs{display:flex;gap:6px;flex-wrap:wrap}
+.subtabs .tab{font-size:13px;padding:4px 12px}
+.search{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:0 12px}
+.search input{border:0;background:transparent;padding:11px 0;flex:1;min-width:0;outline:none}
+.search svg{flex:none;color:var(--muted)}
+.status{font-size:13px;color:var(--muted);padding:8px 0}
+.list{display:grid;gap:10px;margin-top:6px}
+.song{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:8px;min-width:0}
+.song-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.song-title{font-weight:600;font-size:16px;line-height:1.35;overflow-wrap:anywhere}
+.song-artist{color:var(--muted);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:12px;font-weight:600;border-radius:6px;padding:2px 8px}
+.chip.karaoke{color:var(--c-karaoke);background:var(--tint-karaoke)}
+.chip.praise{color:var(--c-praise);background:var(--tint-praise)}
+.chip.wedding{color:var(--c-wedding);background:var(--tint-wedding)}
+.num{display:inline-flex;align-items:baseline;gap:6px;border:1px dashed var(--c-karaoke);border-radius:8px;padding:3px 9px;font-variant-numeric:tabular-nums}
+.num b{font:600 11px var(--f-body);color:var(--c-karaoke)}
+.num span{font:600 15px var(--f-mono);letter-spacing:.5px}
+.song-actions{display:flex;gap:6px;flex:none}
+.icon-btn{border:1px solid var(--line);background:transparent;border-radius:9px;width:36px;height:36px;display:grid;place-items:center;cursor:pointer;color:var(--ink);text-decoration:none}
+.icon-btn.yt{color:var(--accent)}
+.memo{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.confirm-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.empty{text-align:center;padding:48px 16px;color:var(--muted);border:1.5px dashed var(--line);border-radius:16px;display:grid;gap:10px;justify-items:center}
+.empty strong{color:var(--ink);font-size:16px}
+.overlay{position:fixed;inset:0;background:rgba(10,8,20,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;border-radius:18px 18px 0 0;
+  padding:20px max(18px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:grid;gap:14px}
+@media (min-width:640px){.overlay{align-items:center}.sheet{border-radius:18px}}
+.sheet h2{font:400 22px var(--f-display);margin:0}
+.field{display:grid;gap:5px}
+.field label,.lbl{font-size:13px;font-weight:600}
+.field input,.field textarea{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.field textarea{resize:vertical;min-height:60px}
+.url-row{display:flex;gap:8px}
+.url-row input{flex:1}
+.hint{font-size:12px;color:var(--muted)}
+.note{font-size:12px;line-height:1.5;color:var(--muted)}
+.note.warn{color:var(--c-wedding)}
+.note.err{color:var(--accent)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){.row2{grid-template-columns:1fr}}
+.cands{display:grid;gap:6px}
+.cand{text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 12px;cursor:pointer;display:grid}
+.cand[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.cand small{color:var(--muted)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.kbox{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:10px;background:var(--tint-karaoke)}
+.krow{display:grid;grid-template-columns:110px 1fr 36px;gap:8px;align-items:center}
+.krow select,.krow input{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 10px;width:100%;min-width:0}
+.krow input{font-family:var(--f-mono)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.verify{font-size:12px;display:flex;gap:12px;flex-wrap:wrap}
+.verify a{color:var(--c-karaoke)}
+.sheet-foot{display:flex;gap:8px;justify-content:flex-end}
+.login{max-width:420px;margin:12vh auto 0;text-align:center;display:grid;gap:14px;justify-items:center}
+.login h1{font-size:42px}
+</style>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<div class="wrap" id="loginView" hidden>
+  <div class="login">
+    <h1>내 곡 서랍</h1>
+    <p class="sub">유튜브 링크만 넣으면 곡 제목·가수·노래방 번호까지 정리해주는 나만의 곡 목록</p>
+    <button class="btn primary" id="loginBtn" type="button">구글 계정으로 시작하기</button>
+    <p class="note" id="loginNote"></p>
+  </div>
+</div>
+
+<!-- 메인 화면 -->
+<div class="wrap" id="appView" hidden>
+  <header class="top">
+    <div>
+      <h1>내 곡 서랍</h1>
+      <p class="sub">노래방 · 찬양 · 결혼식 곡 모음</p>
+    </div>
+    <div class="head-actions">
+      <button class="btn ghost small" id="logoutBtn" type="button">로그아웃</button>
+      <button class="btn primary" id="addBtn" type="button">+ 곡 추가</button>
+    </div>
+  </header>
+  <div class="toolbar">
+    <div class="tabs" id="tabs"></div>
+    <div class="subtabs" id="subtabs" hidden></div>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="제목, 가수, 노래방 번호, 메모로 검색" autocomplete="off">
+    </div>
+  </div>
+  <div class="status" id="status">불러오는 중…</div>
+  <div class="list" id="list"></div>
+</div>
+
+<!-- 곡 추가/수정 -->
+<div class="overlay" id="overlay" hidden>
+  <form class="sheet" id="form" novalidate>
+    <h2 id="formTitle">곡 추가</h2>
+    <div class="field">
+      <label for="f-url">YouTube 공유 링크</label>
+      <div class="url-row">
+        <input id="f-url" type="url" inputmode="url" placeholder="https://youtu.be/…">
+        <button class="btn" type="button" id="findBtn">찾기</button>
+      </div>
+      <span class="hint">링크를 붙여넣으면 자동으로 찾아요.</span>
+    </div>
+    <div class="note" id="findNote" hidden></div>
+    <div class="cands" id="cands" hidden></div>
+
+    <div class="row2">
+      <div class="field"><label for="f-title">곡 제목</label><input id="f-title"></div>
+      <div class="field"><label for="f-artist">가수</label><input id="f-artist"></div>
+    </div>
+
+    <div class="field"><span class="lbl">카테고리</span><div class="seg" id="f-cat"></div></div>
+    <div class="field" id="weddingField" hidden><span class="lbl">결혼식 용도</span><div class="seg" id="f-wsub"></div></div>
+
+    <div class="kbox" id="karaokeBox" hidden>
+      <div class="bar">
+        <span class="lbl" style="flex:1">노래방 번호</span>
+        <button class="btn ghost small" type="button" id="kFind">번호 찾기</button>
+        <button class="btn ghost small" type="button" id="addK">+ 직접 추가</button>
+      </div>
+      <div id="krows" style="display:grid;gap:8px"></div>
+      <div class="note" id="kNote" hidden></div>
+      <div class="verify" id="verify"></div>
+    </div>
+
+    <div class="field"><label for="f-memo">메모 (선택)</label><textarea id="f-memo" placeholder="키, 순서, 누가 부를지 등"></textarea></div>
+    <div class="note err" id="saveNote" hidden></div>
+    <div class="sheet-foot">
+      <button class="btn ghost" type="button" id="cancelBtn">취소</button>
+      <button class="btn primary" type="submit" id="saveBtn">저장</button>
+    </div>
+  </form>
+</div>
+
+<script type="module">
+// ===== ① 여기에 Firebase 설정값을 붙여넣으세요 (안내서 3단계) =====
+const firebaseConfig = {
+  apiKey: "여기에_붙여넣기",
+  authDomain: "여기에_붙여넣기",
+  projectId: "여기에_붙여넣기",
+  storageBucket: "여기에_붙여넣기",
+  messagingSenderId: "여기에_붙여넣기",
+  appId: "여기에_붙여넣기",
+};
+// =================================================================
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, collection, doc, addDoc, setDoc, deleteDoc, onSnapshot, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { isYouTube, fetchYouTubeInfo, cleanVideoTitle, searchITunes, searchKaraoke, searchLinks } from "./songtools.js";
+
+const $ = id => document.getElementById(id);
+const CATS = { karaoke: "노래방", praise: "찬양", wedding: "결혼" };
+const WSUB = { march: "행진", song: "축가", entrance: "입장" };
+const COMPANIES = ["TJ", "금영", "기타"];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+if (firebaseConfig.apiKey.startsWith("여기")) {
+  $("loginView").hidden = false;
+  $("loginBtn").hidden = true;
+  $("loginNote").textContent = "index.html 맨 아래쪽 firebaseConfig에 Firebase 설정값을 아직 넣지 않았어요. 안내서 3단계를 확인해 주세요.";
+  throw new Error("firebaseConfig 미설정");
+}
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = initializeFirestore(app, { localCache: persistentLocalCache() });
+
+let songs = [], col = null, unsub = null;
+let filter = { cat: "all", wsub: "all", q: "" };
+let editingId = null, form = {}, confirmId = null, findSeq = 0;
+
+// ---------- 로그인 ----------
+$("loginBtn").onclick = async () => {
+  const p = new GoogleAuthProvider();
+  try { await signInWithPopup(auth, p); }
+  catch (e) {
+    if (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment") signInWithRedirect(auth, p);
+    else $("loginNote").textContent = "로그인하지 못했어요. (" + e.code + ")";
+  }
+};
+$("logoutBtn").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  unsub?.(); unsub = null; songs = [];
+  $("loginView").hidden = !!user;
+  $("appView").hidden = !user;
+  if (!user) return;
+  col = collection(db, "users", user.uid, "songs");
+  setStatus("불러오는 중…");
+  unsub = onSnapshot(query(col, orderBy("createdAt", "desc")), snap => {
+    songs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setStatus("");
+    renderList();
+  }, () => setStatus("곡 목록을 불러오지 못했어요. 보안 규칙(안내서 4단계)을 확인해 주세요."));
+});
+function setStatus(t) { $("status").textContent = t; $("status").hidden = !t; }
+
+// ---------- 목록 ----------
+const ICON_YT = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+const ICON_EDIT = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+const ICON_DEL = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg>';
+
+function renderTabs() {
+  const n = c => c === "all" ? songs.length : songs.filter(s => s.category === c).length;
+  $("tabs").innerHTML = [["all", "전체"], ...Object.entries(CATS)].map(([k, v]) =>
+    `<button class="tab" type="button" data-cat="${k}" aria-pressed="${filter.cat === k}">${v}<span class="n">${n(k)}</span></button>`).join("");
+  $("subtabs").hidden = filter.cat !== "wedding";
+  if (filter.cat === "wedding") {
+    const m = k => songs.filter(s => s.category === "wedding" && (k === "all" || s.wsub === k)).length;
+    $("subtabs").innerHTML = [["all", "전체"], ...Object.entries(WSUB)].map(([k, v]) =>
+      `<button class="tab" type="button" data-wsub="${k}" aria-pressed="${filter.wsub === k}">${v}<span class="n">${m(k)}</span></button>`).join("");
+  }
+}
+function visible() {
+  const q = filter.q.trim().toLowerCase();
+  return songs.filter(s => {
+    if (filter.cat !== "all" && s.category !== filter.cat) return false;
+    if (filter.cat === "wedding" && filter.wsub !== "all" && s.wsub !== filter.wsub) return false;
+    if (!q) return true;
+    const hay = [s.title, s.artist, s.memo, ...(s.karaoke || []).map(k => k.company + " " + k.number)].join(" ").toLowerCase();
+    return q.split(/\s+/).every(w => hay.includes(w));
+  });
+}
+function renderList() {
+  renderTabs();
+  const v = visible();
+  if (!songs.length) {
+    $("list").innerHTML = `<div class="empty"><strong>아직 저장한 곡이 없어요</strong><span>'+ 곡 추가'를 누르고 유튜브 링크를 붙여넣어 보세요.<br>제목·가수·노래방 번호를 자동으로 찾아줘요.</span><button class="btn primary" type="button" data-act="add">첫 곡 추가하기</button></div>`;
+    return;
+  }
+  if (!v.length) { $("list").innerHTML = `<div class="empty"><strong>조건에 맞는 곡이 없어요</strong><span>검색어나 카테고리를 바꿔보세요.</span></div>`; return; }
+  $("list").innerHTML = v.map(s => {
+    const chip = `<span class="chip ${s.category}">${CATS[s.category] || ""}${s.category === "wedding" && s.wsub ? " · " + WSUB[s.wsub] : ""}</span>`;
+    const nums = (s.category === "karaoke" ? s.karaoke || [] : []).filter(k => k.number)
+      .map(k => `<span class="num"><b>${esc(k.company)}</b><span>${esc(k.number)}</span></span>`).join("");
+    const yt = s.url ? `<a class="icon-btn yt" href="${esc(s.url)}" target="_blank" rel="noopener" aria-label="유튜브에서 열기">${ICON_YT}</a>` : "";
+    const confirm = confirmId === s.id ? `<div class="confirm-row">이 곡을 삭제할까요? <button class="btn primary small" type="button" data-act="del-yes" data-id="${s.id}">삭제</button><button class="btn ghost small" type="button" data-act="del-no">취소</button></div>` : "";
+    return `<article class="song">
+      <div class="song-head">
+        <div style="min-width:0"><div class="song-title">${esc(s.title)}</div>${s.artist ? `<div class="song-artist">${esc(s.artist)}</div>` : ""}</div>
+        <div class="song-actions">${yt}
+          <button class="icon-btn" type="button" data-act="edit" data-id="${s.id}" aria-label="수정">${ICON_EDIT}</button>
+          <button class="icon-btn" type="button" data-act="del" data-id="${s.id}" aria-label="삭제">${ICON_DEL}</button></div>
+      </div>
+      <div class="chips">${chip}${nums}</div>
+      ${s.memo ? `<div class="memo">${esc(s.memo)}</div>` : ""}${confirm}
+    </article>`;
+  }).join("");
+}
+$("tabs").onclick = e => { const b = e.target.closest("[data-cat]"); if (!b) return; filter.cat = b.dataset.cat; filter.wsub = "all"; renderList(); };
+$("subtabs").onclick = e => { const b = e.target.closest("[data-wsub]"); if (!b) return; filter.wsub = b.dataset.wsub; renderList(); };
+$("q").oninput = e => { filter.q = e.target.value; renderList(); };
+$("list").onclick = async e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const { act, id } = b.dataset;
+  if (act === "add") openForm();
+  if (act === "edit") openForm(songs.find(s => s.id === id));
+  if (act === "del") { confirmId = id; renderList(); }
+  if (act === "del-no") { confirmId = null; renderList(); }
+  if (act === "del-yes") { confirmId = null; try { await deleteDoc(doc(col, id)); } catch { setStatus("삭제하지 못했어요."); } }
+};
+
+// ---------- 입력 폼 ----------
+function note(id, text, kind = "") { const el = $(id); el.textContent = text; el.className = "note " + kind; el.hidden = !text; }
+
+function renderSeg() {
+  $("f-cat").innerHTML = Object.entries(CATS).map(([k, v]) => `<button type="button" data-v="${k}" aria-pressed="${form.category === k}">${v}</button>`).join("");
+  $("f-wsub").innerHTML = Object.entries(WSUB).map(([k, v]) => `<button type="button" data-v="${k}" aria-pressed="${form.wsub === k}">${v}</button>`).join("");
+  $("weddingField").hidden = form.category !== "wedding";
+  $("karaokeBox").hidden = form.category !== "karaoke";
+  renderK();
+}
+function renderK() {
+  $("krows").innerHTML = form.karaoke.map((k, i) => `<div class="krow">
+    <select id="kc-${i}" data-i="${i}" data-f="company" aria-label="노래방 회사">${COMPANIES.map(c => `<option ${c === k.company ? "selected" : ""}>${c}</option>`).join("")}</select>
+    <input id="kn-${i}" data-i="${i}" data-f="number" value="${esc(k.number)}" inputmode="numeric" placeholder="번호" aria-label="노래방 번호">
+    <button type="button" class="icon-btn" data-rm="${i}" aria-label="번호 삭제">${ICON_DEL}</button></div>`).join("");
+  const t = $("f-title").value.trim(), a = $("f-artist").value.trim();
+  const L = searchLinks(t, a);
+  $("verify").innerHTML = t ? `<span class="hint">직접 확인:</span><a href="${L.tj}" target="_blank" rel="noopener">TJ 검색</a><a href="${L.ky}" target="_blank" rel="noopener">금영 검색</a>` : "";
+}
+$("f-cat").onclick = e => {
+  const b = e.target.closest("[data-v]"); if (!b) return;
+  form.category = b.dataset.v;
+  if (form.category === "wedding" && !form.wsub) form.wsub = "song";
+  renderSeg();
+  if (form.category === "karaoke" && !form.karaoke.some(k => k.number) && $("f-title").value.trim()) findKaraoke();
+};
+$("f-wsub").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; form.wsub = b.dataset.v; renderSeg(); };
+$("krows").oninput = e => { const el = e.target; if (el.dataset.i == null) return; form.karaoke[+el.dataset.i][el.dataset.f] = el.value.trim(); };
+$("krows").onclick = e => { const b = e.target.closest("[data-rm]"); if (!b) return; form.karaoke.splice(+b.dataset.rm, 1); renderK(); };
+$("addK").onclick = () => { form.karaoke.push({ company: "TJ", number: "" }); renderK(); };
+$("kFind").onclick = () => findKaraoke();
+["f-title", "f-artist"].forEach(id => $(id).addEventListener("change", renderK));
+
+function openForm(s) {
+  editingId = s?.id || null;
+  form = {
+    category: s?.category || (filter.cat !== "all" ? filter.cat : "karaoke"),
+    wsub: s?.wsub || (filter.wsub !== "all" ? filter.wsub : ""),
+    karaoke: (s?.karaoke || []).map(k => ({ ...k })),
+  };
+  if (form.category === "wedding" && !form.wsub) form.wsub = "song";
+  $("formTitle").textContent = s ? "곡 수정" : "곡 추가";
+  $("f-url").value = s?.url || ""; $("f-title").value = s?.title || ""; $("f-artist").value = s?.artist || ""; $("f-memo").value = s?.memo || "";
+  ["findNote", "kNote", "saveNote"].forEach(id => note(id, ""));
+  $("cands").hidden = true;
+  renderSeg();
+  $("overlay").hidden = false;
+  setTimeout(() => $(s ? "f-title" : "f-url").focus(), 50);
+}
+function closeForm() { findSeq++; $("overlay").hidden = true; }
+$("addBtn").onclick = () => openForm();
+$("cancelBtn").onclick = closeForm;
+$("overlay").onclick = e => { if (e.target === $("overlay")) closeForm(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("overlay").hidden) closeForm(); });
+
+// ---------- 자동 찾기 ----------
+$("f-url").addEventListener("paste", () => setTimeout(findFromLink, 0));
+$("f-url").addEventListener("change", () => { if (!$("f-title").value.trim()) findFromLink(); });
+$("findBtn").onclick = findFromLink;
+
+function pickCandidate(c) {
+  $("f-title").value = c.title; $("f-artist").value = c.artist;
+  [...$("cands").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.k === c.title + "|" + c.artist));
+  renderK();
+  if (form.category === "karaoke") findKaraoke();
+}
+
+async function findFromLink() {
+  const url = $("f-url").value.trim();
+  if (!url) return;
+  if (!isYouTube(url)) { note("findNote", "유튜브 링크 형식이 아니에요. youtu.be 또는 youtube.com 주소를 붙여넣어 주세요.", "err"); return; }
+  const seq = ++findSeq;
+  $("findBtn").disabled = true; $("cands").hidden = true;
+  note("findNote", "영상 정보를 가져오는 중…");
+  try {
+    const info = await fetchYouTubeInfo(url);
+    if (seq !== findSeq) return;
+    if (!info) { note("findNote", "영상 정보를 가져오지 못했어요. 제목과 가수를 직접 입력해 주세요.", "warn"); return; }
+    const guess = cleanVideoTitle(info.title, info.channel);
+    $("f-title").value = guess.title; $("f-artist").value = guess.artist;
+    renderK();
+    note("findNote", `영상 제목 "${info.title}"을 정리했어요. 음원 정보와 맞춰보는 중…`);
+
+    let results = await searchITunes(guess.query);
+    if (!results.length && guess.artist) results = await searchITunes(guess.title);
+    if (seq !== findSeq) return;
+
+    if (results.length) {
+      $("cands").innerHTML = results.slice(0, 4).map(r =>
+        `<button type="button" class="cand" data-k="${esc(r.title + "|" + r.artist)}"><span>${esc(r.title)}</span><small>${esc(r.artist)}${r.album ? " · " + esc(r.album) : ""}</small></button>`).join("");
+      $("cands").hidden = false;
+      [...$("cands").children].forEach((b, i) => b.onclick = () => pickCandidate(results[i]));
+      pickCandidate(results[0]);
+      note("findNote", results.length > 1 ? "음원 정보로 확인했어요. 다른 곡이면 아래 후보에서 골라주세요." : "음원 정보로 확인했어요.");
+    } else {
+      note("findNote", "음원 정보에서 찾지 못해 영상 제목을 정리해서 넣었어요. 맞는지 한 번 봐주세요.", "warn");
+      if (form.category === "karaoke") findKaraoke();
+    }
+  } finally {
+    if (seq === findSeq) $("findBtn").disabled = false;
+  }
+}
+
+async function findKaraoke() {
+  const t = $("f-title").value.trim(), a = $("f-artist").value.trim();
+  if (!t) { note("kNote", "곡 제목을 먼저 넣어주세요.", "warn"); return; }
+  note("kNote", "노래방 번호 찾는 중…");
+  $("kFind").disabled = true;
+  try {
+    const found = await searchKaraoke(t, a);
+    if (!found.length) { note("kNote", "번호를 자동으로 찾지 못했어요. 아래 검색 링크로 확인해서 직접 넣어주세요.", "warn"); return; }
+    for (const f of found) {
+      const k = form.karaoke.find(k => k.company === f.company);
+      if (k) k.number = f.number; else form.karaoke.push(f);
+    }
+    renderK();
+    note("kNote", `${found.map(f => f.company).join(", ")} 번호를 찾았어요.`);
+  } finally { $("kFind").disabled = false; }
+}
+
+// ---------- 저장 ----------
+$("form").onsubmit = async e => {
+  e.preventDefault();
+  const url = $("f-url").value.trim(), title = $("f-title").value.trim();
+  if (url && !isYouTube(url)) { note("saveNote", "유튜브 링크 형식을 확인해 주세요.", "err"); return; }
+  if (!title) { note("saveNote", "곡 제목을 입력해 주세요.", "err"); $("f-title").focus(); return; }
+  const data = {
+    url, title, artist: $("f-artist").value.trim(), category: form.category,
+    wsub: form.category === "wedding" ? form.wsub : "",
+    karaoke: form.category === "karaoke" ? form.karaoke.filter(k => k.number).map(k => ({ company: k.company, number: k.number })) : [],
+    memo: $("f-memo").value.trim(), updatedAt: Date.now(),
+  };
+  $("saveBtn").disabled = true;
+  try {
+    if (editingId) {
+      const old = songs.find(s => s.id === editingId);
+      await setDoc(doc(col, editingId), { ...data, createdAt: old?.createdAt || Date.now() });
+    } else {
+      await addDoc(col, { ...data, createdAt: Date.now() });
+    }
+    closeForm();
+  } catch {
+    note("saveNote", "저장하지 못했어요. 인터넷 연결을 확인하고 다시 눌러주세요.", "err");
+  } finally { $("saveBtn").disabled = false; }
+};
+</script>
+</body>
+</html>
