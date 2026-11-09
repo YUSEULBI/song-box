@@ -241,7 +241,8 @@ export async function searchSongs(guess) {
 }
 
 // ---------- 5. 노래방 번호 (비공식 무료 API, 안 되면 조용히 빈 결과) ----------
-const norm = s => String(s || "").toLowerCase().replace(/[\s()\[\]'".,!?~\-_]/g, "");
+// 악센트 제거(ROSÉ → rose), 소문자, 기호·띄어쓰기 제거
+const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[\s()\[\]'".,!?~\-_]/g, "");
 
 export async function searchKaraoke(title, artist) {
   if (!title) return [];
@@ -276,9 +277,14 @@ export async function searchKaraoke(title, artist) {
         }
       }
       if (!list.length) continue;
-      const a = norm(artist);
-      const hit = list.find(x => norm(x.title) === norm(title) && (!a || norm(x.singer).includes(a) || a.includes(norm(x.singer))))
-               || list.find(x => !a || norm(x.singer).includes(a) || a.includes(norm(x.singer)));
+      const names = splitArtists(artist).map(norm).filter(Boolean);
+      const singerOk = x => !names.length || names.some(a => norm(x.singer).includes(a) || a.includes(norm(x.singer)));
+      const titleOk = x => norm(x.title) === norm(title);
+      const sameTitle = list.filter(titleOk);
+      const hit = list.find(x => titleOk(x) && singerOk(x))      // 제목·가수 모두 일치
+               || (sameTitle.length === 1 ? sameTitle[0] : null)  // 같은 제목이 하나뿐이면 가수 표기가 달라도(ROSÉ/로제) 채택
+               || list.find(singerOk);                           // 가수만 일치
+      if (!hit) console.info(`[곡서랍] 노래방 ${brand} 후보는 있지만 일치하는 곡 없음`, list.slice(0, 5));
       if (hit && hit.no) out.push({ company: brand === "tj" ? "TJ" : "금영", number: String(hit.no) });
     } catch { /* API를 못 쓰면 건너뜀 */ }
   }
