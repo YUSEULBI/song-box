@@ -96,6 +96,13 @@ h1{font:400 34px/1.05 var(--f-display);margin:0;letter-spacing:.5px}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 14px;cursor:pointer}
 .seg button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.sel{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper output{flex:1;text-align:center;font:600 16px var(--f-mono);font-variant-numeric:tabular-nums;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 0}
+.stepper .icon-btn{width:40px;height:40px;font-size:18px}
+.chip.meta{color:var(--ink);background:transparent;border:1px solid var(--line);font-weight:500}
+.chip.high{color:var(--accent);background:transparent;border:1px solid var(--accent)}
+.chip.low{color:var(--c-praise);background:transparent;border:1px solid var(--c-praise)}
 .kbox{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:10px;background:var(--tint-karaoke)}
 .krow{display:grid;grid-template-columns:110px 1fr 36px;gap:8px;align-items:center}
 .krow select,.krow input{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 10px;width:100%;min-width:0}
@@ -167,15 +174,31 @@ h1{font:400 34px/1.05 var(--f-display);margin:0;letter-spacing:.5px}
     <div class="field"><span class="lbl">카테고리</span><div class="seg" id="f-cat"></div></div>
     <div class="field" id="weddingField" hidden><span class="lbl">결혼식 용도</span><div class="seg" id="f-wsub"></div></div>
 
-    <div class="kbox" id="karaokeBox" hidden>
+    <div class="kbox" id="karaokeBox">
       <div class="bar">
-        <span class="lbl" style="flex:1">노래방 번호</span>
+        <span class="lbl" style="flex:1" id="kLabel">노래방 번호</span>
         <button class="btn ghost small" type="button" id="kFind">번호 찾기</button>
         <button class="btn ghost small" type="button" id="addK">+ 직접 추가</button>
       </div>
       <div id="krows" style="display:grid;gap:8px"></div>
       <div class="note" id="kNote" hidden></div>
       <div class="verify" id="verify"></div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">음역 (선택)</span>
+      <div class="seg" id="f-range"></div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="f-okey">원키 (선택)</label>
+        <select id="f-okey" class="sel"></select>
+      </div>
+      <div class="field">
+        <label for="f-mykey">내 키 (선택)</label>
+        <select id="f-mykey" class="sel"></select>
+        <span class="hint">내가 부를 때 맞추는 키</span>
+      </div>
     </div>
 
     <div class="field"><label for="f-memo">메모 (선택)</label><textarea id="f-memo" placeholder="키, 순서, 누가 부를지 등"></textarea></div>
@@ -188,17 +211,8 @@ h1{font:400 34px/1.05 var(--f-display);margin:0;letter-spacing:.5px}
 </div>
 
 <script type="module">
-// ===== ① 여기에 Firebase 설정값을 붙여넣으세요 (안내서 3단계) =====
-const firebaseConfig = {
-  apiKey: "AIzaSyDVhvp7SIez2yfyaL3W1NdJUVJ-H80OC_s",
-  authDomain: "song-box-9108a.firebaseapp.com",
-  projectId: "song-box-9108a",
-  storageBucket: "song-box-9108a.firebasestorage.app",
-  messagingSenderId: "1086721380817",
-  appId: "1:1086721380817:web:8f29fe04f5ed049bf350f0",
-};
-// =================================================================
-
+// Firebase 설정값은 firebase-config.js 파일에 따로 보관해요.
+import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -210,12 +224,19 @@ const $ = id => document.getElementById(id);
 const CATS = { karaoke: "노래방", praise: "찬양", wedding: "결혼" };
 const WSUB = { march: "행진", song: "축가", entrance: "입장" };
 const COMPANIES = ["TJ", "금영", "기타"];
+const RANGES = { high: "고음", low: "저음" };
+const NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+const KEYS = [...NOTES, ...NOTES.map(n => n + "m")];
+const keyOptions = first => `<option value="">${first}</option>` + KEYS.map(k => `<option value="${k}">${k}</option>`).join("");
+$("f-okey").innerHTML = keyOptions("모름");
+$("f-mykey").innerHTML = keyOptions("원키 그대로");
+const myKeyOf = s => typeof s.myKey === "string" && s.myKey !== s.origKey ? s.myKey : "";
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-if (firebaseConfig.apiKey.startsWith("여기")) {
+if (!firebaseConfig?.apiKey || firebaseConfig.apiKey.startsWith("여기")) {
   $("loginView").hidden = false;
   $("loginBtn").hidden = true;
-  $("loginNote").textContent = "index.html 맨 아래쪽 firebaseConfig에 Firebase 설정값을 아직 넣지 않았어요. 안내서 3단계를 확인해 주세요.";
+  $("loginNote").textContent = "firebase-config.js에 Firebase 설정값을 아직 넣지 않았어요. 안내서 3단계를 확인해 주세요.";
   throw new Error("firebaseConfig 미설정");
 }
 
@@ -275,7 +296,8 @@ function visible() {
     if (filter.cat !== "all" && s.category !== filter.cat) return false;
     if (filter.cat === "wedding" && filter.wsub !== "all" && s.wsub !== filter.wsub) return false;
     if (!q) return true;
-    const hay = [s.title, s.artist, s.memo, ...(s.karaoke || []).map(k => k.company + " " + k.number)].join(" ").toLowerCase();
+    const hay = [s.title, s.artist, s.memo, RANGES[s.range], s.origKey && "원키 " + s.origKey, myKeyOf(s) && "내키 내 키 " + myKeyOf(s),
+      ...(s.karaoke || []).map(k => k.company + " " + k.number)].filter(Boolean).join(" ").toLowerCase();
     return q.split(/\s+/).every(w => hay.includes(w));
   });
 }
@@ -289,7 +311,7 @@ function renderList() {
   if (!v.length) { $("list").innerHTML = `<div class="empty"><strong>조건에 맞는 곡이 없어요</strong><span>검색어나 카테고리를 바꿔보세요.</span></div>`; return; }
   $("list").innerHTML = v.map(s => {
     const chip = `<span class="chip ${s.category}">${CATS[s.category] || ""}${s.category === "wedding" && s.wsub ? " · " + WSUB[s.wsub] : ""}</span>`;
-    const nums = (s.category === "karaoke" ? s.karaoke || [] : []).filter(k => k.number)
+    const nums = (s.karaoke || []).filter(k => k.number)
       .map(k => `<span class="num"><b>${esc(k.company)}</b><span>${esc(k.number)}</span></span>`).join("");
     const yt = s.url ? `<a class="icon-btn yt" href="${esc(s.url)}" target="_blank" rel="noopener" aria-label="유튜브에서 열기">${ICON_YT}</a>` : "";
     const confirm = confirmId === s.id ? `<div class="confirm-row">이 곡을 삭제할까요? <button class="btn primary small" type="button" data-act="del-yes" data-id="${s.id}">삭제</button><button class="btn ghost small" type="button" data-act="del-no">취소</button></div>` : "";
@@ -300,7 +322,7 @@ function renderList() {
           <button class="icon-btn" type="button" data-act="edit" data-id="${s.id}" aria-label="수정">${ICON_EDIT}</button>
           <button class="icon-btn" type="button" data-act="del" data-id="${s.id}" aria-label="삭제">${ICON_DEL}</button></div>
       </div>
-      <div class="chips">${chip}${nums}</div>
+      <div class="chips">${chip}${nums}${s.range ? `<span class="chip ${s.range}">${RANGES[s.range]}</span>` : ""}${s.origKey ? `<span class="chip meta">원키 ${esc(s.origKey)}</span>` : ""}${myKeyOf(s) ? `<span class="chip meta">내 키 ${esc(myKeyOf(s))}</span>` : ""}</div>
       ${s.memo ? `<div class="memo">${esc(s.memo)}</div>` : ""}${confirm}
     </article>`;
   }).join("");
@@ -323,9 +345,10 @@ function note(id, text, kind = "") { const el = $(id); el.textContent = text; el
 
 function renderSeg() {
   $("f-cat").innerHTML = Object.entries(CATS).map(([k, v]) => `<button type="button" data-v="${k}" aria-pressed="${form.category === k}">${v}</button>`).join("");
+  $("f-range").innerHTML = [["", "선택 안 함"], ...Object.entries(RANGES)].map(([k, v]) => `<button type="button" data-v="${k}" aria-pressed="${form.range === k}">${v}</button>`).join("");
   $("f-wsub").innerHTML = Object.entries(WSUB).map(([k, v]) => `<button type="button" data-v="${k}" aria-pressed="${form.wsub === k}">${v}</button>`).join("");
   $("weddingField").hidden = form.category !== "wedding";
-  $("karaokeBox").hidden = form.category !== "karaoke";
+  $("kLabel").textContent = form.category === "karaoke" ? "노래방 번호" : "노래방 번호 (선택)";
   renderK();
 }
 function renderK() {
@@ -345,6 +368,7 @@ $("f-cat").onclick = e => {
   if (form.category === "karaoke" && !form.karaoke.some(k => k.number) && $("f-title").value.trim()) findKaraoke();
 };
 $("f-wsub").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; form.wsub = b.dataset.v; renderSeg(); };
+$("f-range").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; form.range = b.dataset.v; renderSeg(); };
 $("krows").oninput = e => { const el = e.target; if (el.dataset.i == null) return; form.karaoke[+el.dataset.i][el.dataset.f] = el.value.trim(); };
 $("krows").onclick = e => { const b = e.target.closest("[data-rm]"); if (!b) return; form.karaoke.splice(+b.dataset.rm, 1); renderK(); };
 $("addK").onclick = () => { form.karaoke.push({ company: "TJ", number: "" }); renderK(); };
@@ -357,7 +381,10 @@ function openForm(s) {
     category: s?.category || (filter.cat !== "all" ? filter.cat : "karaoke"),
     wsub: s?.wsub || (filter.wsub !== "all" ? filter.wsub : ""),
     karaoke: (s?.karaoke || []).map(k => ({ ...k })),
+    range: s?.range || "",
   };
+  $("f-okey").value = s?.origKey || "";
+  $("f-mykey").value = s ? myKeyOf(s) : "";
   if (form.category === "wedding" && !form.wsub) form.wsub = "song";
   $("formTitle").textContent = s ? "곡 수정" : "곡 추가";
   $("f-url").value = s?.url || ""; $("f-title").value = s?.title || ""; $("f-artist").value = s?.artist || ""; $("f-memo").value = s?.memo || "";
@@ -447,7 +474,8 @@ $("form").onsubmit = async e => {
   const data = {
     url, title, artist: $("f-artist").value.trim(), category: form.category,
     wsub: form.category === "wedding" ? form.wsub : "",
-    karaoke: form.category === "karaoke" ? form.karaoke.filter(k => k.number).map(k => ({ company: k.company, number: k.number })) : [],
+    karaoke: form.karaoke.filter(k => k.number).map(k => ({ company: k.company, number: k.number })),
+    range: form.range, origKey: $("f-okey").value, myKey: $("f-mykey").value,
     memo: $("f-memo").value.trim(), updatedAt: Date.now(),
   };
   $("saveBtn").disabled = true;

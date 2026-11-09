@@ -63,7 +63,10 @@ export function cleanVideoTitle(raw, channel = "") {
     artist = channel.replace(/\s*-\s*Topic$/i, "").replace(/\b(official|vevo|channel)\b/gi, "").trim();
   }
   // "IU(아이유)" → 검색용으로 두 이름 다 보존
-  return { title, artist, query: `${artist} ${title}`.replace(/[()]/g, " ").replace(/\s{2,}/g, " ").trim() };
+  // 검색어: "IU(아이유)" → "IU" (괄호 안 별칭은 빼야 검색이 잘 돼요)
+  const mainArtist = artist.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  const mainTitle = title.replace(/\s*\((?!feat|ft\.)[^)]*\)\s*/gi, " ").trim();
+  return { title, artist, query: `${mainArtist} ${mainTitle}`.replace(/\s{2,}/g, " ").trim() };
 }
 
 // ---------- 4. iTunes로 공식 제목·가수 검증 (JSONP: CORS 문제 없음) ----------
@@ -80,23 +83,57 @@ function jsonp(url, timeoutMs = 8000) {
   });
 }
 
-export async function searchITunes(query) {
-  if (!query) return [];
+function dedupe(list) {
+  const seen = new Set();
+  return list.filter(r => {
+    if (!r.title || !r.artist) return false;
+    const k = (r.title + "|" + r.artist).toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+// 일반 요청을 먼저 시도하고, 막히면 JSONP로 다시 시도
+async function getJSON(url, label) {
   try {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=KR&media=music&entity=song&limit=6`;
-    const data = await jsonp(url);
-    const seen = new Set();
-    return (data.results || [])
-      .map(r => ({ title: r.trackName, artist: r.artistName, album: r.collectionName }))
-      .filter(r => {
-        const k = (r.title + "|" + r.artist).toLowerCase();
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-  } catch {
+    const r = await fetch(url);
+    if (r.ok) return await r.json();
+    console.warn(`[곡서랍] ${label} fetch 응답 ${r.status}`);
+  } catch (e) {
+    console.warn(`[곡서랍] ${label} fetch 실패 → JSONP 시도`, e);
+  }
+  try {
+    return await jsonp(url);
+  } catch (e) {
+    console.warn(`[곡서랍] ${label} JSONP 실패`, e);
+    return null;
+  }
+}
+
+async function searchITunesOnly(query) {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=KR&media=music&entity=song&limit=6`;
+  const data = await getJSON(url, "iTunes");
+  return (data?.results || []).map(r => ({ title: r.trackName, artist: r.artistName, album: r.collectionName, src: "iTunes" }));
+}
+
+async function searchDeezer(query) {
+  try {
+    const data = await jsonp(`https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=6&output=jsonp`);
+    return (data?.data || []).map(r => ({ title: r.title, artist: r.artist?.name, album: r.album?.title, src: "Deezer" }));
+  } catch (e) {
+    console.warn("[곡서랍] Deezer JSONP 실패", e);
     return [];
   }
+}
+
+// 이름은 그대로 두고, 여러 음원 DB를 차례로 찾도록 확장
+export async function searchITunes(query) {
+  if (!query) return [];
+  let list = await searchITunesOnly(query);
+  if (!list.length) list = await searchDeezer(query);
+  console.info(`[곡서랍] "${query}" 검색 결과 ${list.length}건`, list);
+  return dedupe(list);
 }
 
 // ---------- 5. 노래방 번호 (비공식 무료 API, 안 되면 조용히 빈 결과) ----------

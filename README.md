@@ -33,7 +33,18 @@ GitHub Pages(호스팅)와 Firebase(로그인·저장)를 써서 **비용 0원**
 2. **프로젝트 만들기** → 이름 `song-box` → Google 애널리틱스는 **사용 안 함** → 만들기
 3. 프로젝트 첫 화면에서 **웹 아이콘 `</>`** 클릭 → 앱 닉네임 `song-box` → **앱 등록** (Hosting 체크 안 함)
 4. 화면에 나온 `const firebaseConfig = { ... }` 안의 값 6개를 복사
-5. GitHub 저장소에서 `index.html` 열기 → 연필 아이콘(Edit) → `firebaseConfig` 부분의 `"여기에_붙여넣기"`를 실제 값으로 바꾸기 → **Commit changes**
+5. GitHub 저장소 → **Add file** → **Create new file** → 파일 이름 `firebase-config.js` → 내용에 아래처럼 복사한 값을 넣고 **Commit changes**
+   ```js
+   export const firebaseConfig = {
+     apiKey: "...",
+     authDomain: "...",
+     projectId: "...",
+     storageBucket: "...",
+     messagingSenderId: "...",
+     appId: "...",
+   };
+   ```
+   맨 앞이 `const`가 아니라 `export const`여야 해요.
 
 > apiKey가 공개 저장소에 올라가도 괜찮아요. Firebase의 웹용 키는 원래 공개되는 값이고, 실제 보호는 4단계 보안 규칙이 해요.
 
