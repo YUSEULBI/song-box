@@ -50,8 +50,20 @@ export function extractKaraokeNumbers(raw) {
 
 const KARAOKE_CHANNEL = /(karaoke|노래방|\bTJ\b|\bKY\b|금영|태진)/i;
 
+// "진영&최유리", "IU(아이유)", "A, B", "A feat. B" → ["진영","최유리"], ["IU","아이유"] ...
+export function splitArtists(s) {
+  const out = [];
+  for (const part of String(s || "").split(/\s*(?:&|,|×|\s+x\s+|\bfeat\.?|\bft\.?|\bwith\b)\s*/i)) {
+    const main = part.replace(/\([^)]*\)/g, " ").trim();
+    if (main) out.push(main);
+    for (const m of part.matchAll(/\(([^)]+)\)/g)) if (m[1].trim()) out.push(m[1].trim());
+  }
+  return [...new Set(out)];
+}
+
 export function cleanVideoTitle(raw, channel = "") {
-  let t = String(raw || "");
+  // 이모지 제거 (🎤, ✨ 등)
+  let t = String(raw || "").replace(/[\p{Extended_Pictographic}️‍]/gu, " ");
   // 노래방 채널 표기 제거: "/ KY KARAOKE", "| TJ Karaoke", "(KY.53191)", "[TJ노래방]"
   t = t.replace(/\(?\s*(TJ|KY|금영)\s*(노래방)?\s*[.#:\-]?\s*\d{4,6}\s*\)?/gi, " ");
   t = t.split(/\s[\/|｜]\s?/)[0];
@@ -85,17 +97,22 @@ export function cleanVideoTitle(raw, channel = "") {
     artist = words.pop();
     title = words.join(" ");
   }
+  // "진영&최유리 생각을 멈추다 보면": 첫 단어에 &·×·, 가 있으면 가수 여러 명으로 봄
+  else if (/[&×,]/.test(t.split(" ")[0]) && t.split(" ").length >= 2) {
+    const words = t.split(" ");
+    artist = words.shift();
+    title = words.join(" ");
+  }
   title = title.replace(/^["'“‘]|["'”’]$/g, "").trim();
 
   // 가수를 못 찾으면 채널명 사용 (" - Topic", "Official" 등 정리). 노래방 채널 이름은 가수가 아니니 제외.
   if (!artist && channel && !KARAOKE_CHANNEL.test(channel)) {
     artist = channel.replace(/\s*-\s*Topic$/i, "").replace(/\b(official|vevo|channel)\b/gi, "").trim();
   }
-  // "IU(아이유)" → 검색용으로 두 이름 다 보존
   // 검색어: "IU(아이유)" → "IU" (괄호 안 별칭은 빼야 검색이 잘 돼요)
-  const mainArtist = artist.replace(/\s*\([^)]*\)\s*/g, " ").trim();
-  const mainTitle = title.replace(/\s*\((?!feat|ft\.)[^)]*\)\s*/gi, " ").trim();
-  return { title, artist, query: `${mainArtist} ${mainTitle}`.replace(/\s{2,}/g, " ").trim() };
+  const artists = splitArtists(artist);
+  const mainTitle = title.replace(/\s*\((?!feat|ft\.)[^)]*\)\s*/gi, " ").replace(/\s{2,}/g, " ").trim();
+  return { title, artist, artists, mainTitle, query: `${artists[0] || ""} ${mainTitle}`.trim() };
 }
 
 // ---------- 4. iTunes로 공식 제목·가수 검증 (JSONP: CORS 문제 없음) ----------
@@ -140,10 +157,19 @@ async function getJSON(url, label) {
   }
 }
 
-async function searchITunesOnly(query) {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=US&media=music&entity=song&limit=6`;
-  const data = await getJSON(url, "iTunes");
-  return (data?.results || []).map(r => ({ title: r.trackName, artist: r.artistName, album: r.collectionName, src: "iTunes" }));
+// 미국 스토어에서 검색 (한국 스토어는 음원 판매가 없어 검색 결과가 0건이에요)
+async function searchUS(query) {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&country=US&media=music&entity=song&limit=8`;
+  const data = await getJSON(url, "iTunes 검색");
+  return (data?.results || []).filter(r => r.kind === "song");
+}
+
+// 곡 번호로 한국 스토어를 조회해서 한글 제목·가수를 받아요
+async function lookupKR(ids) {
+  if (!ids.length) return [];
+  const url = `https://itunes.apple.com/lookup?id=${ids.join(",")}&country=KR`;
+  const data = await getJSON(url, "iTunes 한국 조회");
+  return (data?.results || []).filter(r => r.kind === "song");
 }
 
 async function searchDeezer(query) {
@@ -156,25 +182,61 @@ async function searchDeezer(query) {
   }
 }
 
-// 검색 결과가 검색어 단어들과 얼마나 맞는지 점수 매기기 (0~1)
-const normWord = s => String(s || "").toLowerCase().replace(/[\s()\[\]'".,!?~\-_·]/g, "");
-export function matchScore(cand, query) {
-  const words = String(query || "").split(/\s+/).map(normWord).filter(w => w.length >= 1);
-  if (!words.length) return 0;
-  const hay = normWord(cand.title + " " + cand.artist);
-  return words.filter(w => hay.includes(w)).length / words.length;
+// ---------- 점수 매기기 ----------
+const normWord = s => String(s || "").toLowerCase().replace(/[\s()\[\]'".,!?~\-_·&]/g, "");
+const NOT_ORIGINAL = /(instrumental|\binst\b|\bmr\b|karaoke|반주|remix|sped\s*up|slowed|cover|piano\s*ver|acoustic\s*ver)/i;
+
+// 후보 하나가 영상에서 뽑은 제목·가수와 얼마나 맞는지
+export function scoreCandidate(c, guess) {
+  const titleWords = String(guess.mainTitle || guess.title || "").split(/\s+/).map(normWord).filter(Boolean);
+  const titles = [c.title, c.enTitle].filter(Boolean).map(normWord);
+  const candArtists = [c.artist, c.enArtist].filter(Boolean).map(normWord);
+
+  let titleScore = 0;
+  if (titleWords.length) {
+    for (const ct of titles) {
+      const s = titleWords.filter(w => ct.includes(w)).length / titleWords.length;
+      titleScore = Math.max(titleScore, s);
+    }
+  }
+  const guessArtists = (guess.artists || []).map(normWord).filter(Boolean);
+  const artistHit = guessArtists.some(a => candArtists.some(ca => ca.includes(a) || a.includes(ca)));
+  const notOriginal = NOT_ORIGINAL.test(c.title || "") || NOT_ORIGINAL.test(c.album || "");
+
+  const score = titleScore * 0.6 + (artistHit ? 0.4 : 0) - (notOriginal ? 0.3 : 0);
+  const exact = titleScore === 1 && (artistHit || !guessArtists.length) && !notOriginal;
+  return { score: Math.round(score * 100) / 100, exact, artistHit };
 }
 
-// 이름은 그대로 두고, 여러 음원 DB를 찾아 점수 순으로 정렬
-export async function searchITunes(query) {
-  if (!query) return [];
-  let list = await searchITunesOnly(query);
-  const best = l => Math.max(0, ...l.map(c => matchScore(c, query)));
-  if (best(list) < 1) list = list.concat(await searchDeezer(query));
+// 영상 정보로 공식 음원 찾기: 미국 스토어 검색 → 한국 스토어에서 한글 이름 조회 → 점수순 정렬
+export async function searchSongs(guess) {
+  const t = guess.mainTitle || guess.title;
+  if (!t) return [];
+  const queries = [...new Set([...(guess.artists || []).slice(0, 3).map(a => `${a} ${t}`), t])];
+
+  const byId = new Map();
+  for (const q of queries) {
+    for (const r of await searchUS(q)) {
+      if (byId.has(r.trackId)) continue;
+      byId.set(r.trackId, {
+        trackId: r.trackId, title: r.trackName, artist: r.artistName, album: r.collectionName,
+        enTitle: r.trackName, enArtist: r.artistName, src: "iTunes",
+      });
+    }
+  }
+  // 한국 스토어에 있는 곡은 한글 이름으로 바꿔요
+  for (const r of await lookupKR([...byId.keys()].slice(0, 30))) {
+    const c = byId.get(r.trackId);
+    if (c) Object.assign(c, { title: r.trackName, artist: r.artistName, album: r.collectionName, kr: true });
+  }
+
+  let list = [...byId.values()];
+  if (!list.length) list = await searchDeezer(guess.query || t);
+
   list = dedupe(list)
-    .map(c => ({ ...c, score: matchScore(c, query) }))
-    .sort((a, b) => b.score - a.score);
-  console.info(`[곡서랍] "${query}" 검색 결과 ${list.length}건`, list);
+    .map(c => ({ ...c, ...scoreCandidate(c, guess) }))
+    .sort((a, b) => b.score - a.score || (b.kr ? 1 : 0) - (a.kr ? 1 : 0));
+  console.info(`[곡서랍] 검색어 ${JSON.stringify(queries)} → ${list.length}건`, list);
   return list;
 }
 
@@ -189,8 +251,12 @@ export async function searchKaraoke(title, artist) {
   for (const brand of ["tj", "kumyoung"]) {
     try {
       let list = null;
-      const r = await fetch(`https://api.manana.kr/karaoke/song/${encodeURIComponent(title)}/${brand}.json`);
-      if (r.ok) list = await r.json();
+      // 띄어쓰기 있는 제목 → 없는 제목 순서로 시도 (TJ는 띄어쓰기 없이 등록된 곡이 많아요)
+      for (const t of [...new Set([title, title.replace(/\s+/g, "")])]) {
+        const r = await fetch(`https://api.manana.kr/karaoke/song/${encodeURIComponent(t)}/${brand}.json`).catch(() => null);
+        if (r?.ok) list = await r.json().catch(() => null);
+        if (Array.isArray(list) && list.length) break;
+      }
       if (!Array.isArray(list) || !list.length) {
         if (all === null) {
           const r2 = await fetch(`https://api.manana.kr/karaoke/song/${encodeURIComponent(title)}.json`).catch(() => null);
@@ -198,6 +264,16 @@ export async function searchKaraoke(title, artist) {
           console.info("[곡서랍] 노래방 전체검색 응답", r2?.status, all);
         }
         list = (Array.isArray(all) ? all : []).filter(x => String(x.brand || "").toLowerCase() === brand);
+      }
+      // 제목으로 못 찾으면 가수 이름으로 검색해서 띄어쓰기 무시하고 제목 비교
+      if (!list.length && artist) {
+        for (const singer of splitArtists(artist)) {
+          const r3 = await fetch(`https://api.manana.kr/karaoke/singer/${encodeURIComponent(singer)}/${brand}.json`).catch(() => null);
+          const bySinger = r3?.ok ? await r3.json().catch(() => []) : [];
+          console.info(`[곡서랍] 노래방 가수검색 ${brand} "${singer}"`, r3?.status, Array.isArray(bySinger) ? bySinger.length : bySinger);
+          list = (Array.isArray(bySinger) ? bySinger : []).filter(x => norm(x.title) === norm(title) || norm(x.title).includes(norm(title)));
+          if (list.length) break;
+        }
       }
       if (!list.length) continue;
       const a = norm(artist);
